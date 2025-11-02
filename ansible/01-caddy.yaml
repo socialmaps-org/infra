@@ -1,0 +1,28 @@
+---
+- name: Configure system
+  hosts: singularity
+  gather_facts: true
+
+  tasks:
+    - name: Update package cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 43200  # 12 hours
+
+    - name: Install required packages
+      ansible.builtin.apt:
+        pkg:
+          - caddy
+
+    - name: Copy the Caddyfile
+      ansible.builtin.copy:
+        src: ./assets/Caddyfile
+        dest: /etc/caddy/Caddyfile
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: Reload Caddy
+      ansible.builtin.systemd_service:
+        name: caddy
+        state: reloaded

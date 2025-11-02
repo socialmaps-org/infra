@@ -1,0 +1,18 @@
+auth.socialmaps.org {
+    @not_trusted_ip not remote_ip 127.0.0.1
+    @public_paths   path /realms/* /resources/* /.well-known/*
+
+    log
+
+    handle @public_paths {
+        reverse_proxy 127.0.0.1:8080
+    }
+
+    handle {
+        respond @not_trusted_ip 403 {
+            body "Unauthorized IP"
+            close
+        }
+        reverse_proxy 127.0.0.1:8080
+    }
+}

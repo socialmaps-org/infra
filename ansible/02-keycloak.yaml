@@ -1,0 +1,191 @@
+---
+- name: Configure Keycloak Realm 'socialmaps'
+  hosts: singularity
+  gather_facts: true
+
+  vars:
+    admin_password: "{{ lookup('env', 'ADMIN_PASSWORD') }}"
+    ansible_admin_password: "{{ lookup('ansible.builtin.password', '/dev/null', seed=inventory_hostname) }}"
+
+    osm_client_id: "{{ lookup('env', 'OSM_CLIENT_ID') }}"
+    osm_client_secret: "{{ lookup('env', 'OSM_CLIENT_SECRET') }}"
+
+    socialmaps_api_client_secret: "{{ lookup('env', 'SOCIALMAPS_API_CLIENT_SECRET') }}"
+
+  module_defaults:
+    group/community.general.keycloak:
+      auth_realm: "master"
+      auth_keycloak_url: "http://127.0.0.1:8080"
+      auth_client_id: "admin-cli"
+      auth_username: "ansible_admin"
+      auth_password: "{{ ansible_admin_password }}"
+      validate_certs: true
+
+  tasks:
+    - name: Check if required environment variables are defined
+      ansible.builtin.assert:
+        that:
+          - osm_client_id is defined
+          - osm_client_id|length > 0
+          - osm_client_secret is defined
+          - osm_client_secret|length > 0
+          - socialmaps_api_client_secret is defined
+          - socialmaps_api_client_secret|length > 0
+
+    - name: Update package cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 43200  # 12 hours
+
+    - name: Install required packages
+      ansible.builtin.apt:
+        pkg:
+          - docker.io
+
+    - name: Start keycloak container
+      community.docker.docker_container:
+        name: keycloak
+        image: quay.io/keycloak/keycloak:26.4
+        pull: always
+        command: start-dev
+        restart_policy: unless-stopped
+        state: healthy
+        healthcheck:
+          interval: 1s
+          test:
+            - CMD-SHELL
+            - >
+              { printf 'HEAD /health/ready HTTP/1.0\r\n\r\n' >&0; grep 'HTTP/1.0 200'; } 0<>/dev/tcp/localhost/9000
+        ports:
+          - 127.0.0.1:8080:8080
+          - 127.0.0.1:9000:9000
+        env:
+          KC_BOOTSTRAP_ADMIN_USERNAME: ansible_admin
+          KC_BOOTSTRAP_ADMIN_PASSWORD: "{{ ansible_admin_password }}"
+          KC_HEALTH_ENABLED: 'true'
+          KC_METRICS_ENABLED: 'true'
+          KC_HOSTNAME: auth.socialmaps.org
+          KC_HTTP_ENABLED: 'true'
+          KC_PROXY_HEADERS: xforwarded
+
+    - name: Create user "admin"
+      community.general.keycloak_user:
+        username: admin
+        email: admin@socialmaps.org
+        email_verified: true
+        enabled: true
+        credentials:
+          - type: password
+            value: "{{ admin_password }}"
+
+    - name: Assign "admin" role to "admin"
+      community.general.keycloak_user_rolemapping:
+        target_username: "admin"
+        roles:
+          - name: "admin"
+
+    - name: Ensure 'socialmaps' realm exists
+      community.general.keycloak_realm:
+        realm: "socialmaps"
+        display_name: "Social Maps"
+        enabled: true
+
+    - name: Configure user profile for 'socialmaps' realm
+      community.general.keycloak_userprofile:
+        realm: "socialmaps"
+        config:
+          kc_user_profile_config:
+            - attributes:
+                - name: "username"
+                  display_name: "${username}"
+                  permissions:
+                    edit: ["admin"]
+                    view: ["admin", "user"]
+                  required:
+                    roles: ["admin", "user"]
+                - name: "email"
+                  display_name: "${email}"
+                  permissions:
+                    edit: ["admin"]
+                    view: ["admin"]
+                  required:
+                    roles: ["admin"]
+
+    - name: Create OpenStreetMap OIDC Identity Provider
+      community.general.keycloak_identity_provider:
+        realm: "socialmaps"
+        alias: "openstreetmap"
+        display_name: "OpenStreetMap"
+        provider_id: "oidc"
+        config:
+          fromUrl: "https://www.openstreetmap.org/.well-known/openid-configuration.json"
+          clientId: "{{ osm_client_id }}"
+          clientSecret: "{{ osm_client_secret }}"
+        mappers:
+          - name: "openstreetmap_sub"
+            identityProviderMapper: oidc-user-attribute-idp-mapper
+            config:
+              claim: sub
+              user.attribute: openstreetmap_sub
+              syncMode: IMPORT
+
+    - name: Create 'openstreetmap_sub' client scope
+      community.general.keycloak_clientscope:
+        realm: "socialmaps"
+        name: "openstreetmap_sub"
+        protocol: "openid-connect"
+        protocol_mappers:
+          - name: "openstreetmap_sub"
+            protocol: "openid-connect"
+            protocolMapper: "oidc-usermodel-attribute-mapper"
+            config:
+              claim.name: "openstreetmap_sub"
+              user.attribute: "openstreetmap_sub"
+              access.token.claim: true
+              id.token.claim: true
+              userinfo.token.claim: true
+
+    - name: Create 'browser-osm' authentication flow
+      community.general.keycloak_authentication:
+        realm: "socialmaps"
+        alias: "browser-osm"
+        providerId: "basic-flow"
+        authenticationExecutions:
+          - providerId: "identity-provider-redirector"
+            requirement: "REQUIRED"
+            authenticationConfig:
+              alias: "identity-provider-redirector-with-openstreetmap-default"
+              config:
+                defaultProvider: "openstreetmap"
+
+    - name: Create 'public-test-client' public client
+      community.general.keycloak_client:
+        realm: "socialmaps"
+        client_id: "public-test-client"
+        name: "Public Test Client"
+        public_client: true
+        standard_flow_enabled: true
+        redirect_uris:
+          - "urn:ietf:wg:oauth:2.0:oob"
+          - "http://127.0.0.1:7676/socialmaps/auth/callback"
+        client_scopes_behavior: "idempotent"
+        default_client_scopes:
+          - "basic"
+          - "profile"
+          - "openstreetmap_sub"
+        authentication_flow_binding_overrides:
+          browser_name: "browser-osm"
+        attributes:
+          'pkce.code.challenge.method': 'S256'
+
+    - name: Create 'socialmaps-api' bearer-only client
+      community.general.keycloak_client:
+        realm: "socialmaps"
+        client_id: "socialmaps-api"
+        name: "Social Maps API"
+        public_client: false
+        client_authenticator_type: client-secret
+        standard_flow_enabled: false
+        direct_access_grants_enabled: false
+        service_accounts_enabled: true
+        secret: "{{ socialmaps_api_client_secret }}"
