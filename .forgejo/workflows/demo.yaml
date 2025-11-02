@@ -4,7 +4,7 @@ jobs:
     runs-on: codeberg-small
     steps:
       - uses: actions/checkout@v4
-      - uses: terraform-linters/setup-tflint@v6
+      - uses: github.com/terraform-linters/setup-tflint@v6
         name: Setup TFLint
         with:
           tflint_version: v0.59.1
