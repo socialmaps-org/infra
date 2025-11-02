@@ -9,4 +9,4 @@ jobs:
         with:
           tflint_version: v0.59.1
           cache: true
-      - run: tflint -f compact terraform/
+      - run: tflint --format=compact --chdir=terraform/
