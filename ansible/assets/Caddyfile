@@ -31,3 +31,9 @@ logs.socialmaps.org {
         reverse_proxy victoria-logs:9428
     }
 }
+
+api.socialmaps.org {
+    log
+
+    reverse_proxy socialmaps-api:8080
+}

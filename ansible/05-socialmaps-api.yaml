@@ -1,0 +1,53 @@
+---
+- name: Configure Social Maps API
+  hosts: singularity
+  gather_facts: true
+
+  vars:
+    socialmaps_api_client_secret: "{{ lookup('env', 'SOCIALMAPS_API_CLIENT_SECRET') }}"
+
+  tasks:
+    - name: Check if required environment variables are defined
+      ansible.builtin.assert:
+        that:
+          - socialmaps_api_client_secret is defined
+          - socialmaps_api_client_secret|length > 0
+
+    - name: Start socialmaps-api container
+      community.docker.docker_container:
+        name: socialmaps-api
+        image: registry.gitlab.com/socialmaps/api:main
+        pull: always
+        recreate: true
+        volumes:
+          - /root/volume/socialmaps-api/root:/root
+        restart_policy: unless-stopped
+        networks:
+          - name: service-bridge
+        env:
+          LISTEN_ADDR: '0.0.0.0:8080'
+          # Make sure to use the exact same host
+          # (i.e. `https://auth.socialmaps.org`) as your clients do when they
+          # issue access tokens.
+          #
+          # If you use a different host (e.g. `http://keycloak:8080`) instead
+          # in your introspect URL, you'll keep getting `{"active":false}`
+          # responses despite having a valid token at hand.
+          #
+          # See <https://stackoverflow.com/questions/53721588>
+          OAUTH2_INTROSPECT_URL: 'https://auth.socialmaps.org/realms/socialmaps/protocol/openid-connect/token/introspect'
+          OAUTH2_CLIENT_SECRET: "{{ socialmaps_api_client_secret }}"
+        # "Containers use the same DNS servers as the host by default",
+        # including the /etc/hosts file of the host. We do not want that.
+        #
+        # The reason is that we've mapped auth.socialmaps.org to 127.0.0.1 for
+        # IP-based access restriction enforced by Caddy. However, when the
+        # socialmaps-api container resolves auth.socialmaps.org to 127.0.0.1
+        # based on the /etc/hosts file of the host, the container tries to
+        # connect to itself, instead of its host where the Caddy is exposed.
+        #
+        # We use Quad9 DNS with the recommended config (malware blocking +
+        # DNSSEC validation).
+        dns_servers:
+          - 9.9.9.9
+          - 149.112.112.112

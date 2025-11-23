@@ -171,10 +171,10 @@
         attributes:
           'pkce.code.challenge.method': 'S256'
 
-    - name: Create 'socialmaps-api' bearer-only client
+    - name: Create 'org.socialmaps.api' bearer-only client
       community.general.keycloak_client:
         realm: "socialmaps"
-        client_id: "socialmaps-api"
+        client_id: "org.socialmaps.api"
         name: "Social Maps API"
         public_client: false
         client_authenticator_type: client-secret
