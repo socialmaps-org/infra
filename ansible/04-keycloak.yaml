@@ -32,21 +32,12 @@
           - socialmaps_api_client_secret is defined
           - socialmaps_api_client_secret|length > 0
 
-    - name: Update package cache
-      ansible.builtin.apt:
-        update_cache: true
-        cache_valid_time: 43200  # 12 hours
-
-    - name: Install required packages
-      ansible.builtin.apt:
-        pkg:
-          - docker.io
-
     - name: Start keycloak container
       community.docker.docker_container:
         name: keycloak
         image: quay.io/keycloak/keycloak:26.4
         pull: always
+        recreate: true
         command: start-dev
         restart_policy: unless-stopped
         state: healthy
@@ -56,9 +47,11 @@
             - CMD-SHELL
             - >
               { printf 'HEAD /health/ready HTTP/1.0\r\n\r\n' >&0; grep 'HTTP/1.0 200'; } 0<>/dev/tcp/localhost/9000
+        networks:
+          - name: service-bridge
         ports:
+          # For Ansible API access
           - 127.0.0.1:8080:8080
-          - 127.0.0.1:9000:9000
         env:
           KC_BOOTSTRAP_ADMIN_USERNAME: ansible_admin
           KC_BOOTSTRAP_ADMIN_PASSWORD: "{{ ansible_admin_password }}"

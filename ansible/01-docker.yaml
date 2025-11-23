@@ -12,17 +12,21 @@
     - name: Install required packages
       ansible.builtin.apt:
         pkg:
-          - caddy
+          - docker.io
 
-    - name: Copy the Caddyfile
+    - name: Create a network
+      community.docker.docker_network:
+        name: service-bridge
+
+    - name: Copy the config
       ansible.builtin.copy:
-        src: ./assets/Caddyfile
-        dest: /etc/caddy/Caddyfile
+        src: ./assets/daemon.json
+        dest: /etc/docker/daemon.json
         owner: root
         group: root
         mode: u=rw,g=r,o=r
 
-    - name: Reload Caddy
+    - name: Reload docker.service
       ansible.builtin.systemd_service:
-        name: caddy
-        state: reloaded
+        name: docker.service
+        state: restarted

@@ -1,0 +1,45 @@
+---
+- name: Configure system
+  hosts: singularity
+  gather_facts: true
+
+  tasks:
+    - name: Create directory `/root/volume/caddy-config`
+      ansible.builtin.file:
+        path: /root/volume/caddy/etc/caddy
+        state: directory
+        mode: '0755'
+
+    - name: Copy the Caddyfile
+      ansible.builtin.copy:
+        src: ./assets/Caddyfile
+        dest: /root/volume/caddy/etc/caddy/Caddyfile
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: Start Caddy container
+      community.docker.docker_container:
+        name: caddy
+        image: docker.io/caddy:2.10
+        pull: always
+        recreate: true
+        networks:
+          - name: service-bridge
+        volumes:
+          - /root/volume/caddy/config:/config
+          - /root/volume/caddy/data:/data
+          - /root/volume/caddy/etc/caddy:/etc/caddy
+        restart_policy: unless-stopped
+        capabilities:
+          # Caddy ships with HTTP/3 support enabled by default. To improve the
+          # performance of this UDP based protocol, the underlying quic-go
+          # library tries to increase the buffer sizes for its socket. The
+          # NET_ADMIN capability allows it to override the low default limits of
+          # the operating system without having to change kernel parameters
+          # via sysctl.
+          - NET_ADMIN
+        ports:
+          - 0.0.0.0:80:80
+          - 0.0.0.0:443:443
+          - 0.0.0.0:443:443/udp

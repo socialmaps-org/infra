@@ -35,7 +35,7 @@
         update_cache: true
         upgrade: safe
 
-    - name: Add auth.socialmaps.org to /etc/hosts
+    - name: Add *.socialmaps.org to /etc/hosts
       block:
         - name: Modify `/etc/cloud/templates/hosts.debian.tmpl`
           ansible.builtin.blockinfile:
@@ -45,6 +45,7 @@
             insertafter: EOF
             block: |
               127.0.0.1 auth.socialmaps.org
+              127.0.0.1 logs.socialmaps.org
         - name: Update /etc/hosts
           ansible.builtin.command: "cloud-init single --name update_etc_hosts"
           changed_when: true

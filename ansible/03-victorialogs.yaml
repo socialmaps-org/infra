@@ -1,0 +1,48 @@
+---
+- name: Configure Victoria Logs
+  hosts: singularity
+  gather_facts: true
+
+  tasks:
+    - name: Install required packages
+      ansible.builtin.apt:
+        pkg:
+          - systemd-journal-remote
+
+    - name: Start Victoria Logs container
+      community.docker.docker_container:
+        name: victoria-logs
+        image: docker.io/victoriametrics/victoria-logs:v1.38.0
+        pull: always
+        recreate: true
+        volumes:
+          - /root/volume/victoria-logs/data:/data
+        command:
+          - "-storageDataPath=/data"
+        restart_policy: unless-stopped
+        ports:
+          # Expose 9428 on localhost for systemd-journal-remote to upload logs to.
+          - 127.0.0.1:9428:9428
+        networks:
+          - name: service-bridge
+
+    - name: Configure systemd journal upload
+      block:
+        - name: Create directory `/etc/systemd/journal-upload.conf.d`
+          ansible.builtin.file:
+            path: /etc/systemd/journal-upload.conf.d
+            state: directory
+            mode: '0755'
+
+        - name: Copy the configuration
+          ansible.builtin.copy:
+            src: ./assets/victoria-logs.conf
+            dest: /etc/systemd/journal-upload.conf.d/victoria-logs.conf
+            owner: root
+            group: root
+            mode: u=rw,g=r,o=r
+
+    - name: Restart systemd-journal-upload.service
+      ansible.builtin.systemd_service:
+        name: systemd-journal-upload.service
+        state: restarted
