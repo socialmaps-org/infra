@@ -1,0 +1,19 @@
+when:
+  branch: main
+  event: [push, pull_request, manual]
+
+steps:
+  - name: lint-ci
+    image: docker.io/woodpeckerci/woodpecker-cli:v3.13.0-alpine
+    commands:
+      - woodpecker-cli lint --strict
+
+  - name: tflint
+    image: ghcr.io/terraform-linters/tflint
+    commands:
+      - tflint --format=compact --chdir=terraform/
+
+  - name: ansible-lint
+    image: docker.io/cytopia/ansible-lint:latest
+    commands:
+      - ansible/
