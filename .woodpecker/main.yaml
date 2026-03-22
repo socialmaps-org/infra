@@ -11,9 +11,10 @@ steps:
   - name: tflint
     image: ghcr.io/terraform-linters/tflint
     commands:
-      - tflint --format=compact --chdir=terraform/
+      - ./scripts/tflint.sh
 
   - name: ansible-lint
-    image: docker.io/cytopia/ansible-lint:latest
+    image: docker.io/python:3.14.3-trixie
     commands:
-      - ansible/
+      - pip3 install ansible ansible-dev-tools
+      - ./scripts/ansible-lint.sh
