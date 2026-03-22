@@ -1,0 +1,26 @@
+---
+- name: Configure Social Maps Backend
+  hosts: singularity
+  gather_facts: true
+
+  vars:
+    scw_secret_key: "{{ lookup('env', 'SCW_SECRET_KEY') }}"
+
+  tasks:
+    - name: Check if required environment variables are defined
+      ansible.builtin.assert:
+        that:
+          - scw_secret_key is defined
+          - scw_secret_key|length > 0
+
+    - name: Start socialmaps-backend container
+      community.docker.docker_container:
+        name: socialmaps-backend
+        image: codeberg.org/socialmaps/backend:latest
+        pull: always
+        recreate: true
+        restart_policy: unless-stopped
+        networks:
+          - name: service-bridge
+        env:
+          SCW_SECRET_KEY: "{{ scw_secret_key }}"

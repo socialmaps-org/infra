@@ -45,7 +45,7 @@
             insertafter: EOF
             block: |
               127.0.0.1 auth.socialmaps.org
-              127.0.0.1 logs.socialmaps.org
+              127.0.0.1 logs.internal.socialmaps.org
         - name: Update /etc/hosts
           ansible.builtin.command: "cloud-init single --name update_etc_hosts"
           changed_when: true

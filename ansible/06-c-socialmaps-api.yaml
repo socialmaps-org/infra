@@ -5,6 +5,7 @@
 
   vars:
     socialmaps_api_client_secret: "{{ lookup('env', 'SOCIALMAPS_API_CLIENT_SECRET') }}"
+    mistral_api_key: "{{ lookup('env', 'MISTRAL_API_KEY') }}"
 
   tasks:
     - name: Check if required environment variables are defined
@@ -12,20 +13,23 @@
         that:
           - socialmaps_api_client_secret is defined
           - socialmaps_api_client_secret|length > 0
+          - mistral_api_key is defined
+          - mistral_api_key|length > 0
 
     - name: Start socialmaps-api container
       community.docker.docker_container:
         name: socialmaps-api
-        image: registry.gitlab.com/socialmaps/api:main
+        image: codeberg.org/socialmaps/api:latest
         pull: always
         recreate: true
         volumes:
-          - /root/volume/socialmaps-api/root:/root
+          - /var/run/postgresql/:/var/run/postgresql/
         restart_policy: unless-stopped
         networks:
           - name: service-bridge
         env:
           LISTEN_ADDR: '0.0.0.0:8080'
+          DATABASE_DSN: 'postgres:///socialmaps?host=/var/run/postgresql&sslmode=disable&user=socialmaps_api'
           # Make sure to use the exact same host
           # (i.e. `https://auth.socialmaps.org`) as your clients do when they
           # issue access tokens.
@@ -37,6 +41,7 @@
           # See <https://stackoverflow.com/questions/53721588>
           OAUTH2_INTROSPECT_URL: 'https://auth.socialmaps.org/realms/socialmaps/protocol/openid-connect/token/introspect'
           OAUTH2_CLIENT_SECRET: "{{ socialmaps_api_client_secret }}"
+          MISTRAL_SECRET: "{{ mistral_api_key }}"
         # "Containers use the same DNS servers as the host by default",
         # including the /etc/hosts file of the host. We do not want that.
         #

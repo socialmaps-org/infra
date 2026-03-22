@@ -1,0 +1,85 @@
+---
+- name: Initialise PostgreSQL Database
+  hosts: singularity
+  gather_facts: true
+
+  tasks:
+    - name: Clone the repo
+      ansible.builtin.git:
+        repo: 'https://codeberg.org/socialmaps/api.git'
+        dest: /root/socialmaps/api
+        version: main
+        single_branch: true
+        update: true
+
+    - name: Create a `/root/geofabrik` directory
+      ansible.builtin.file:
+        path: /root/geofabrik
+        state: directory
+        mode: u=rwx,g=rx,o=rx
+
+    - name: Download Geofabrik extract of London
+      ansible.builtin.get_url:
+        url: https://download.geofabrik.de/europe/united-kingdom/england/greater-london-latest.osm.pbf
+        dest: /root/geofabrik/greater-london-latest.osm.pbf
+        mode: u=rw,g=r,o=r
+
+    - name: Download Geofabrik extract of Ireland
+      ansible.builtin.get_url:
+        url: https://download.geofabrik.de/europe/ireland-and-northern-ireland-latest.osm.pbf
+        dest: /root/geofabrik/ireland-and-northern-ireland-latest.osm.pbf
+        mode: u=rw,g=r,o=r
+
+    - name: Import Monaco
+      community.docker.docker_container:
+        name: tmp-import-osm
+        image: docker.io/iboates/osm2pgsql:2.2.0
+        pull: always
+        recreate: true
+        detach: false
+        auto_remove: true
+        restart_policy: "no"
+        volumes:
+          - '/root/socialmaps/api/scripts/osm2pgsql.lua:/osm2pgsql.lua:ro'
+          - "/root/socialmaps/api/assets/monaco-260226.osm.pbf:/extract.osm.pbf:ro"
+        network_mode: host
+        command:
+          - 'osm2pgsql'
+          - '--host=127.0.0.1'
+          - '--port=5432'
+          - '--user=osm2pgsql'
+          - '--schema=osm2pgsql'
+          - '--database=socialmaps'
+          - '--output=flex'
+          - '--style=/osm2pgsql.lua'
+          - '--slim'
+          - '/extract.osm.pbf'
+
+    - name: Import all the rest
+      community.docker.docker_container:
+        name: tmp-import-osm
+        image: docker.io/iboates/osm2pgsql:2.2.0
+        pull: always
+        recreate: true
+        detach: false
+        auto_remove: true
+        restart_policy: "no"
+        volumes:
+          - '/root/socialmaps/api/scripts/osm2pgsql.lua:/osm2pgsql.lua:ro'
+          - "{{ item }}:/extract.osm.pbf:ro"
+        network_mode: host
+        command:
+          - 'osm2pgsql'
+          - '--host=127.0.0.1'
+          - '--port=5432'
+          - '--user=osm2pgsql'
+          - '--schema=osm2pgsql'
+          - '--database=socialmaps'
+          - '--output=flex'
+          - '--style=/osm2pgsql.lua'
+          - '--append'
+          - '--slim'
+          - '/extract.osm.pbf'
+      loop:
+        - /root/geofabrik/greater-london-latest.osm.pbf
+        - /root/geofabrik/ireland-and-northern-ireland-latest.osm.pbf

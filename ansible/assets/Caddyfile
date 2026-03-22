@@ -17,7 +17,13 @@ auth.socialmaps.org {
     }
 }
 
-logs.socialmaps.org {
+backend.socialmaps.org {
+    log
+
+    reverse_proxy socialmaps-backend:3000
+}
+
+logs.internal.socialmaps.org {
     @not_trusted_ip not remote_ip private_ranges
 
     log
@@ -36,4 +42,10 @@ api.socialmaps.org {
     log
 
     reverse_proxy socialmaps-api:8080
+}
+
+app.socialmaps.org {
+    log
+
+    reverse_proxy socialmaps-webapp:80
 }

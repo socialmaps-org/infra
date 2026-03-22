@@ -1,0 +1,15 @@
+---
+- name: Configure Social Maps Web App
+  hosts: singularity
+  gather_facts: true
+
+  tasks:
+    - name: Start socialmaps-webapp container
+      community.docker.docker_container:
+        name: socialmaps-webapp
+        image: codeberg.org/socialmaps/webapp:latest
+        pull: always
+        recreate: true
+        restart_policy: unless-stopped
+        networks:
+          - name: service-bridge
