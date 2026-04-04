@@ -6,6 +6,8 @@
   vars:
     socialmaps_api_client_secret: "{{ lookup('env', 'SOCIALMAPS_API_CLIENT_SECRET') }}"
     mistral_api_key: "{{ lookup('env', 'MISTRAL_API_KEY') }}"
+    openai_api_key: "{{ lookup('env', 'OPENAI_API_KEY') }}"
+    openai_base_url: "{{ lookup('env', 'OPENAI_BASE_URL') }}"
 
   tasks:
     - name: Check if required environment variables are defined
@@ -15,6 +17,10 @@
           - socialmaps_api_client_secret|length > 0
           - mistral_api_key is defined
           - mistral_api_key|length > 0
+          - openai_api_key is defined
+          - openai_api_key|length > 0
+          - openai_base_url is defined
+          - openai_base_url|length > 0
 
     - name: Start socialmaps-api container
       community.docker.docker_container:
@@ -42,6 +48,8 @@
           OAUTH2_INTROSPECT_URL: 'https://auth.socialmaps.org/realms/socialmaps/protocol/openid-connect/token/introspect'
           OAUTH2_CLIENT_SECRET: "{{ socialmaps_api_client_secret }}"
           MISTRAL_SECRET: "{{ mistral_api_key }}"
+          OPENAI_API_KEY: "{{ openai_api_key }}"
+          OPENAI_BASE_URL: "{{ openai_base_url }}"
         # "Containers use the same DNS servers as the host by default",
         # including the /etc/hosts file of the host. We do not want that.
         #
