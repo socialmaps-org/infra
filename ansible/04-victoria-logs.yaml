@@ -1,11 +1,13 @@
 ---
 - name: Configure Victoria Logs
-  hosts: singularity
+  hosts: singleton
   gather_facts: true
 
   tasks:
     - name: Install required packages
       ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 43200  # 12 hours
         pkg:
           - systemd-journal-remote
 
@@ -45,4 +47,5 @@
     - name: Restart systemd-journal-upload.service
       ansible.builtin.systemd_service:
         name: systemd-journal-upload.service
+        enabled: true
         state: restarted

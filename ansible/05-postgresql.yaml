@@ -1,0 +1,165 @@
+---
+- name: Install PostgreSQL
+  hosts: singleton
+  gather_facts: true
+
+  tasks:
+    - name: Create a `/usr/share/postgresql-common/pgdg` directory
+      ansible.builtin.file:
+        path: /usr/share/postgresql-common/pgdg
+        state: directory
+        mode: u=rwx,g=rx,o=rx
+
+    - name: Add PostgreSQL's apt repository
+      block:
+        - name: Get the signing key
+          ansible.builtin.get_url:
+            url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+            dest: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+            mode: u=rw,g=r,o=r
+        - name: Add apt repository
+          ansible.builtin.apt_repository:
+            repo: deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt trixie-pgdg main
+        - name: Update repositories
+          ansible.builtin.apt:
+            update_cache: true
+
+    - name: Install postgresql-common first to configure installation beforehand
+      ansible.builtin.apt:
+        pkg:
+          - postgresql-common
+
+    - name: Configure PostgreSQL to use `/data/postgresql` as its data directory
+      block:
+        - name: Create directory `/etc/postgresql-common/createcluster.d`
+          ansible.builtin.file:
+            path: /etc/postgresql-common/createcluster.d
+            state: directory
+            owner: root
+            group: root
+            mode: u=rwx,g=rx,o=rx
+
+        - name: Create directory `/data/postgresql`
+          ansible.builtin.file:
+            path: /data/postgresql
+            state: directory
+            owner: postgres
+            group: postgres
+            mode: u=rwx,g=rx,o=rx
+
+        - name: Copy PostgreSQL createcluster overrides.conf
+          ansible.builtin.copy:
+            src: ./assets/createcluster.conf
+            dest: /etc/postgresql-common/createcluster.d/overrides.conf
+            owner: root
+            group: root
+            mode: u=rw,g=r,o=r
+
+    - name: Install PostgreSQL 18
+      ansible.builtin.apt:
+        pkg:
+          - postgresql-18
+          - postgresql-18-postgis-3
+          - postgresql-client-18
+          # Required by the `community.postgresql.postgresql_alter_system`
+          # module, see:
+          # <https://docs.ansible.com/projects/ansible/latest/collections/community/postgresql/postgresql_alter_system_module.html#requirements>
+          - python3-psycopg2
+
+    - name: Tune PostgreSQL for performance
+      # See:
+      #   * <https://www.postgresql.org/docs/18/runtime-config-resource.html>
+      #   * <https://www.postgresql.org/docs/18/runtime-config-wal.html>
+      #   * <https://www.postgresql.org/docs/18/runtime-config-query.html>
+      become: true
+      become_user: postgres
+      block:
+        # > Sets the amount of memory the database server uses for shared memory
+        # buffers.
+        #
+        # > If you have a dedicated database server with 1GB or more of RAM, a
+        # > reasonable starting value for shared_buffers is 25% of the memory in
+        # > your system.
+        - name: Set shared_buffers
+          community.postgresql.postgresql_alter_system:
+            param: shared_buffers
+            # 64 GB * 25% =
+            value: '16GB'
+
+        # > Sets the base maximum amount of memory to be used by a query
+        # > operation (such as a sort or hash table) before writing to temporary
+        # > disk files.
+        - name: Set work_mem
+          community.postgresql.postgresql_alter_system:
+            param: work_mem
+            value: '50MB'
+
+        # > Specifies the maximum amount of memory to be used by maintenance
+        # > operations, such as `VACUUM`, `CREATE INDEX`, and
+        # > `ALTER TABLE ADD FOREIGN KEY`.
+        #
+        # > Since only one of these operations can be executed at a time by a
+        # > database session, and an installation normally doesn't have many of
+        # > them running concurrently, it's safe to set this value significantly
+        # > larger than `work_mem`. Larger settings might improve performance
+        # > for vacuuming and for restoring database dumps.
+        - name: Set maintenance_work_mem
+          community.postgresql.postgresql_alter_system:
+            param: maintenance_work_mem
+            value: '32GB'
+
+        # > Specifies the maximum amount of memory to be used by each autovacuum
+        # > worker process.
+        #
+        # > Note that when autovacuum runs, up to `autovacuum_max_workers` times
+        # > [`maintenance_work_mem`] may be allocated, so be careful [...]. It
+        # > may be useful to control for this by separately setting
+        # > `autovacuum_work_mem`.
+        - name: Set autovacuum_work_mem
+          community.postgresql.postgresql_alter_system:
+            param: autovacuum_work_mem
+            value: '2GB'
+
+        # > `wal_level` determines how much information is written to the WAL.
+        #
+        # > `minimal` removes all logging except the information required to
+        # > recover from a crash or immediate shutdown.
+        - name: Set wal_level
+          community.postgresql.postgresql_alter_system:
+            param: wal_level
+            value: 'minimal'
+
+        # > However, minimal WAL does not contain sufficient information for
+        # > point-in-time recovery, so replica or higher must be used to enable
+        # > continuous archiving (archive_mode) and streaming binary
+        # > replication. In fact, the server will not even start in this mode if
+        # > `max_wal_senders` is non-zero.
+        - name: Set max_wal_senders
+          community.postgresql.postgresql_alter_system:
+            param: max_wal_senders
+            value: '0'
+
+        # > Maximum time between automatic WAL checkpoints.
+        - name: Set checkpoint_timeout
+          community.postgresql.postgresql_alter_system:
+            param: checkpoint_timeout
+            value: '60min'
+
+        # > Maximum size to let the WAL grow during automatic checkpoints.
+        - name: Set max_wal_size
+          community.postgresql.postgresql_alter_system:
+            param: max_wal_size
+            value: '10GB'
+
+        # > Sets the planner's estimate of the cost of a
+        # > non-sequentially-fetched disk page.
+        - name: Set random_page_cost
+          community.postgresql.postgresql_alter_system:
+            param: random_page_cost
+            value: '1.5'
+
+    - name: Restart postgresql.service
+      ansible.builtin.systemd_service:
+        name: postgresql.service
+        enabled: true
+        state: restarted

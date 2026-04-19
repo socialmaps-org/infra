@@ -1,18 +1,37 @@
 ---
-- name: Configure system
-  hosts: singularity
+- name: Install Docker
+  hosts: singleton
   gather_facts: true
 
   tasks:
-    - name: Update package cache
-      ansible.builtin.apt:
-        update_cache: true
-        cache_valid_time: 43200  # 12 hours
+    - name: Add Docker's apt repository
+      block:
+        - name: Get the signing key
+          ansible.builtin.get_url:
+            url: https://download.docker.com/linux/debian/gpg
+            dest: /etc/apt/keyrings/docker.asc
+            mode: u=rw,g=r,o=r
+        - name: Add apt repository
+          ansible.builtin.deb822_repository:
+            name: docker
+            types: deb
+            uris: https://download.docker.com/linux/debian
+            suites: trixie
+            components: stable
+            architectures: amd64
+            signed_by: /etc/apt/keyrings/docker.asc
+        - name: Update package cache
+          ansible.builtin.apt:
+            update_cache: true
 
-    - name: Install required packages
+    - name: Install Docker packages
       ansible.builtin.apt:
         pkg:
-          - docker.io
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
 
     - name: Create a network
       community.docker.docker_network:
@@ -29,4 +48,5 @@
     - name: Reload docker.service
       ansible.builtin.systemd_service:
         name: docker.service
+        enabled: true
         state: restarted

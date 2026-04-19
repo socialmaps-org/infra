@@ -1,77 +1,20 @@
 ---
 - name: Configure system
-  hosts: singularity
+  hosts: singleton
   gather_facts: true
 
-  vars:
-    # yamllint disable rule:line-length
-    ssh_pubkey: |
-      ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBJV7//jF3nZUwHyuE8D2uRkL1k+q8ym5QWl0rO9WlHlGHaOG6paD/LqA6pKulYUxMWArbfu5wUin/yYwwN2ISc0= bora@secretive.colt.local
-    # yamllint enable rule:line-length
-
   tasks:
-    - name: Create a group named "john"
-      ansible.builtin.group:
-        name: john
-
-    - name: Create a user named "john"
-      ansible.builtin.user:
-        name: john
-        shell: /bin/bash
-        group: john
-        groups:
-          - john
-          - sudo
-          - users
-
-    - name: Set the authorized key for "john"
-      ansible.posix.authorized_key:
-        user: john
-        exclusive: true
-        key: "{{ ssh_pubkey }}"
-
     - name: Upgrade existing packages
       ansible.builtin.apt:
         update_cache: true
         upgrade: safe
 
-    - name: Add *.socialmaps.org to /etc/hosts
-      block:
-        - name: Modify `/etc/cloud/templates/hosts.debian.tmpl`
-          ansible.builtin.blockinfile:
-            path: /etc/cloud/templates/hosts.debian.tmpl
-            prepend_newline: true
-            append_newline: true
-            insertafter: EOF
-            block: |
-              127.0.0.1 auth.socialmaps.org
-              127.0.0.1 logs.internal.socialmaps.org
-        - name: Update /etc/hosts
-          ansible.builtin.command: "cloud-init single --name update_etc_hosts"
-          changed_when: true
-
-    - name: Disable Ubuntu ESM (Expanded Security Maintenance) in MOTD
-      block:
-        - name: Create file `/var/lib/update-notifier/hide-esm-in-motd`
-          ansible.builtin.file:
-            path: /var/lib/update-notifier/hide-esm-in-motd
-            state: touch
-            owner: root
-            group: root
-            mode: u=rw,g=r,o=r
-        - name: Remove file `/var/lib/update-notifier/updates-available`
-          ansible.builtin.file:
-            path: /var/lib/update-notifier/updates-available
-            state: absent
-        - name: Update package cache
-          ansible.builtin.apt:
-            update_cache: true
-
-    - name: Disable MOTD news
-      ansible.builtin.lineinfile:
-        path: /etc/default/motd-news
-        search_string: ENABLED=1
-        line: ENABLED=0
+    - name: Install common packages
+      ansible.builtin.apt:
+        pkg:
+          # Required for third-party apt repositories
+          - ca-certificates
+          - git
 
     - name: Reboot
       ansible.builtin.reboot: {}

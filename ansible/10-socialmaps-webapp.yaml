@@ -1,6 +1,6 @@
 ---
 - name: Configure Social Maps Web App
-  hosts: singularity
+  hosts: singleton
   gather_facts: true
 
   tasks:

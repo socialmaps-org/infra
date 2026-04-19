@@ -1,0 +1,28 @@
+---
+- name: Initialise PostgreSQL Database
+  hosts: singleton
+  gather_facts: true
+
+  become: true
+  become_user: socialmaps_api
+
+  tasks:
+    - name: Clone the repo
+      ansible.builtin.git:
+        repo: 'https://codeberg.org/socialmaps/api.git'
+        dest: /home/socialmaps_api/api
+        version: main
+        single_branch: true
+        update: true
+
+    - name: Drop schema `socialmaps`
+      community.postgresql.postgresql_query:
+        login_db: socialmaps
+        login_user: socialmaps_api
+        query: DROP SCHEMA IF EXISTS socialmaps CASCADE;
+
+    - name: Run the migration
+      community.postgresql.postgresql_script:
+        login_db: socialmaps
+        login_user: socialmaps_api
+        path: /home/socialmaps_api/api/internal/database/schema.sql

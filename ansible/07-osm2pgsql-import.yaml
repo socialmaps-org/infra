@@ -1,0 +1,62 @@
+---
+- name: Import the "planet"
+  hosts: singleton
+  gather_facts: true
+
+  tasks:
+    - name: Install aria2 and osm2pgsql
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 43200  # 12 hours
+        pkg:
+          - aria2
+          - osm2pgsql
+        default_release: trixie-backports
+
+    - name: Download `osm2pgsql.lua`
+      become: true
+      become_user: osm2pgsql
+      ansible.builtin.get_url:
+        url: https://codeberg.org/socialmaps/api/raw/branch/main/scripts/osm2pgsql.lua
+        dest: /home/osm2pgsql/osm2pgsql.lua
+        mode: u=rw,g=r,o=r
+
+    - name: Download the "planet" file
+      become: true
+      become_user: osm2pgsql
+      block:
+        - name: Download `planet-latest.osm.pbf.torrent`
+          ansible.builtin.get_url:
+            url: https://planet.openstreetmap.org/pbf/planet-latest.osm.pbf.torrent
+            dest: /home/osm2pgsql/planet-latest.osm.pbf.torrent
+            mode: u=rw,g=r,o=r
+        - name: Download `planet-latest.osm.pbf`
+          changed_when: true
+          ansible.builtin.command:
+            chdir: /home/osm2pgsql/
+            argv:
+              - aria2c
+              - --seed-time=0
+              - --bt-stop-timeout=60
+              - planet-latest.osm.pbf.torrent
+
+    - name: Run osm2pgsql as a transient systemd unit
+      register: out_systemd_run
+      changed_when: out_systemd_run.rc == 0
+      ansible.builtin.shell:
+        cmd: >-
+          systemd-run
+          --unit=osm2pgsql-import
+          --property=StandardOutput=journal
+          --property=StandardError=journal
+          --uid=osm2pgsql
+          --working-directory=/home/osm2pgsql/
+          osm2pgsql
+          --user=osm2pgsql
+          --database=socialmaps
+          --schema=osm2pgsql
+          --output=flex
+          --style=osm2pgsql.lua
+          --slim
+          --create
+          /home/osm2pgsql/planet-*.osm.pbf

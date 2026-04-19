@@ -1,5 +1,5 @@
 all:
   hosts:
-    singularity:
-      ansible_host: 49.13.30.5
+    singleton:
+      ansible_host: 95.217.79.58
       ansible_user: root

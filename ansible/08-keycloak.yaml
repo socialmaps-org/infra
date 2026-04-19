@@ -1,6 +1,6 @@
 ---
 - name: Configure Keycloak Realm 'socialmaps'
-  hosts: singularity
+  hosts: singleton
   gather_facts: true
 
   vars:

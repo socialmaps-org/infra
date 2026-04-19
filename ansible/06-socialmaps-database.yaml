@@ -1,0 +1,89 @@
+---
+- name: Initialise PostgreSQL Database of Social Maps
+  hosts: singleton
+  gather_facts: true
+
+  tasks:
+    - name: Create system users
+      block:
+        - name: Create new system user `socialmaps_api`
+          ansible.builtin.user:
+            name: socialmaps_api
+            shell: /bin/bash
+        - name: Create new system user `osm2pgsql`
+          ansible.builtin.user:
+            name: osm2pgsql
+            shell: /bin/bash
+
+    - name: Configure PostgreSQL database `socialmaps`
+      become: true
+      become_user: postgres
+      block:
+        # `community.postgresql.postgresql_db` currently does not support
+        # `builtin_locale` so I am using the following:
+        #
+        #     createdb \
+        #       --encoding=UTF8 \
+        #       --locale-provider=builtin \
+        #       --builtin-locale='C.UTF-8' \
+        #       --template=template0 \
+        #       socialmaps
+        #
+        # - name: Create new database `socialmaps`
+        #   community.postgresql.postgresql_db:
+        #     name: socialmaps
+        #     encoding: UTF8
+        #     locale_provider: builtin
+        #     builtin_locale: C.UTF-8
+        #     template: template0
+
+        - name: Enable PostGIS extension on the database
+          community.postgresql.postgresql_ext:
+            login_db: socialmaps
+            name: postgis
+
+        - name: Create new PostgreSQL user `socialmaps_api`
+          community.postgresql.postgresql_user:
+            login_db: socialmaps
+            name: socialmaps_api
+
+        - name: Create new PostgreSQL user `osm2pgsql`
+          community.postgresql.postgresql_user:
+            login_db: socialmaps
+            name: osm2pgsql
+
+        - name: Create new PostgreSQL schema `osm2pgsql`
+          community.postgresql.postgresql_schema:
+            login_db: socialmaps
+            name: osm2pgsql
+            owner: osm2pgsql
+
+        - name: Grant all privileges on database to role `socialmaps_api`
+          community.postgresql.postgresql_privs:
+            login_db: socialmaps
+            type: database
+            privs: ALL
+            obj: socialmaps
+            role: socialmaps_api
+
+        - name: Grant usage privileges on schema `osm2pgsql` to role `socialmaps_api`
+          community.postgresql.postgresql_privs:
+            login_db: socialmaps
+            type: schema
+            privs: usage
+            objs: osm2pgsql
+            role: socialmaps_api
+
+        - name: Alter default privileges in schema `osm2pgsql` to allow role `socialmaps_api` to SELECT
+          community.postgresql.postgresql_privs:
+            login_db: socialmaps
+            schema: osm2pgsql
+            objs: TABLES,SEQUENCES
+            privs: SELECT
+            type: default_privs
+            # Comma separated list of role (user/group) names to set permissions
+            # for.
+            role: socialmaps_api
+            # A list of existing role (user/group) names to set as the default
+            # permissions for database objects subsequently created by them.
+            target_roles: osm2pgsql

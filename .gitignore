@@ -4,6 +4,9 @@
 
 .envrc
 
+secrets.yaml
+.vault_pass
+
 .terraform/
 *.tfstate*
 secrets.auto.tfvars

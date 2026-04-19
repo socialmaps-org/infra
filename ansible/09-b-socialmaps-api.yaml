@@ -1,6 +1,6 @@
 ---
 - name: Configure Social Maps API
-  hosts: singularity
+  hosts: singleton
   gather_facts: true
 
   vars:
@@ -26,6 +26,7 @@
       community.docker.docker_container:
         name: socialmaps-api
         image: codeberg.org/socialmaps/api:latest
+        user: 1001  # FIXME: MAKE THIS DETERMINISTIC
         pull: always
         recreate: true
         volumes:
@@ -50,17 +51,3 @@
           MISTRAL_SECRET: "{{ mistral_api_key }}"
           OPENAI_API_KEY: "{{ openai_api_key }}"
           OPENAI_BASE_URL: "{{ openai_base_url }}"
-        # "Containers use the same DNS servers as the host by default",
-        # including the /etc/hosts file of the host. We do not want that.
-        #
-        # The reason is that we've mapped auth.socialmaps.org to 127.0.0.1 for
-        # IP-based access restriction enforced by Caddy. However, when the
-        # socialmaps-api container resolves auth.socialmaps.org to 127.0.0.1
-        # based on the /etc/hosts file of the host, the container tries to
-        # connect to itself, instead of its host where the Caddy is exposed.
-        #
-        # We use Quad9 DNS with the recommended config (malware blocking +
-        # DNSSEC validation).
-        dns_servers:
-          - 9.9.9.9
-          - 149.112.112.112
