@@ -1,0 +1,14 @@
+[Unit]
+Description=Keep osm2pgsql database up-to-date
+
+[Service]
+WorkingDirectory=/home/osm2pgsql
+ExecStart=/usr/bin/osm2pgsql-replication update --user=osm2pgsql --database=socialmaps --schema=osm2pgsql
+# The `-` prefix in ExecStartPost indicates that the unit (osm2pgsql-update)
+# should be considered succeeded even if curl fails.
+ExecStartPost=-/usr/bin/curl --fail --silent --show-error --retry 2 --max-time 10 http://127.0.0.1:3001/api/push/a2NmWUPYIc4EoZFM0C6UKSV2ifMV4Y8R?status=up&msg=OK&ping=
+StandardOutput=journal
+User=osm2pgsql
+Type=simple
+Restart=on-failure
+RestartSec=5min

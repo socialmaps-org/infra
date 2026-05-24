@@ -1,5 +1,5 @@
 auth.socialmaps.org {
-    @not_trusted_ip not remote_ip private_ranges
+    @not_trusted_ip not remote_ip 10.0.0.2/32
     @public_paths   path /realms/* /resources/* /.well-known/*
 
     log
@@ -42,4 +42,23 @@ app.socialmaps.org {
     log
 
     reverse_proxy socialmaps-webapp:80
+}
+
+status.socialmaps.org {
+    @not_trusted_ip not remote_ip 10.0.0.2/32
+    @public_paths   path / /status/* /assets/* /icon.svg /api/status-page/* /api/entry-page /serviceWorker.js
+
+    log
+
+    handle @public_paths {
+        reverse_proxy uptime-kuma:3001
+    }
+
+    handle {
+        respond @not_trusted_ip 403 {
+            body "Unauthorized IP"
+            close
+        }
+        reverse_proxy uptime-kuma:3001
+    }
 }

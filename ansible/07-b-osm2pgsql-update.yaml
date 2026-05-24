@@ -1,0 +1,35 @@
+---
+- name: Set up osm2pgsql-replication to update periodically
+  hosts: singleton
+  gather_facts: true
+
+  tasks:
+    # - name: Initialise osm2pgsql-replication
+    #   become: true
+    #   become_user: osm2pgsql
+    #   ansible.builtin.command:
+    #     chdir: /home/osm2pgsql/
+    #     argv:
+    #       - osm2pgsql-replication
+    #       - init
+    #       - --user=osm2pgsql
+    #       - --database=socialmaps
+    #       - --schema=osm2pgsql
+
+    - name: Copy `osm2pgsql-update` systemd service files
+      ansible.builtin.copy:
+        src: ./assets/{{ item }}
+        dest: /etc/systemd/system/{{ item }}
+        owner: root
+        group: root
+        mode: u=rw,g=rx,o=rx
+      loop:
+        - osm2pgsql-update.service
+        - osm2pgsql-update.timer
+
+    - name: Start `osm2pgsql-update.timer`
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+        state: restarted
+        enabled: true
+        name: osm2pgsql-update.timer

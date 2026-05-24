@@ -9,12 +9,31 @@
         update_cache: true
         upgrade: safe
 
+    - name: Pre-seed debconf to enable unattended-upgrades
+      ansible.builtin.debconf:
+        name: unattended-upgrades
+        question: unattended-upgrades/enable_auto_updates
+        vtype: boolean
+        value: 'true'
+      notify:
+        - dpkg-reconfigure unattended-upgrades
+
     - name: Install common packages
       ansible.builtin.apt:
         pkg:
           # Required for third-party apt repositories
           - ca-certificates
           - git
+          - unattended-upgrades
 
     - name: Reboot
       ansible.builtin.reboot: {}
+
+  handlers:
+    - name: Run dpkg-reconfigure unattended-upgrades
+      ansible.builtin.command:
+        argv:
+          - dpkg-reconfigure
+          - --frontend=noninteractive
+          - unattended-upgrades
+      changed_when: true

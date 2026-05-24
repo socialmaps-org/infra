@@ -1,0 +1,9 @@
+[Unit]
+Description=Trigger a osm2pgsql database update
+
+[Timer]
+OnBootSec=10
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target

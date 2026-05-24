@@ -1,0 +1,20 @@
+---
+- name: Configure Uptime Kuma (status.socialmaps.org)
+  hosts: singleton
+  gather_facts: true
+
+  tasks:
+    - name: Start Uptime Kuma container
+      community.docker.docker_container:
+        name: uptime-kuma
+        image: docker.io/louislam/uptime-kuma:2.3.2
+        pull: always
+        recreate: true
+        volumes:
+          - /root/volume/uptime-kuma/app/data:/app/data
+        ports:
+          # For receiving heartbeats of locally running scheduled tasks.
+          - 127.0.0.1:3001:3001/tcp
+        restart_policy: unless-stopped
+        networks:
+          - name: service-bridge
