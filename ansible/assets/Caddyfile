@@ -62,3 +62,18 @@ status.socialmaps.org {
         reverse_proxy uptime-kuma:3001
     }
 }
+
+pgadmin.socialmaps.org {
+    @not_trusted_ip not remote_ip 10.0.0.2/32
+
+    log
+
+    handle {
+        respond @not_trusted_ip 403 {
+            body "Unauthorized IP"
+            close
+        }
+
+        reverse_proxy pgadmin4:80
+    }
+}

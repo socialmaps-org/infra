@@ -1,0 +1,101 @@
+---
+- name: Configure pgAdmin (pgadmin.socialmaps.org)
+  hosts: singleton
+  gather_facts: true
+
+  tasks:
+    # Prefer this over `vars_files` as that requires decrypting
+    # the vault just for linting.
+    - name: Load secrets
+      ansible.builtin.include_vars:
+        file: secrets.yaml
+      no_log: true
+
+    - name: Check if required variables are defined
+      ansible.builtin.assert:
+        that:
+          - secret_pgadmin_default_password is defined
+          - secret_pgadmin_default_password|length > 0
+
+    - name: Copy servers.json
+      ansible.builtin.copy:
+        src: ./assets/servers.json
+        dest: /root/volume/pgadmin4/pgadmin4/
+        owner: root
+        group: root
+        mode: u=rw,g=r,o=r
+
+    - name: Create new system user `pgadmin`
+      ansible.builtin.user:
+        name: pgadmin
+        uid: 5050
+        shell: /bin/bash
+
+    - name: Configure PostgreSQL database `socialmaps`
+      become: true
+      become_user: postgres
+      block:
+        - name: Create new PostgreSQL user `pgadmin`
+          community.postgresql.postgresql_user:
+            login_db: socialmaps
+            name: pgadmin
+
+        - name: Grant all privileges on database to role `pgadmin`
+          community.postgresql.postgresql_privs:
+            login_db: socialmaps
+            type: database
+            privs: ALL
+            obj: socialmaps
+            role: pgadmin
+
+        - name: Grant usage privileges on schema `socialmaps` to role `pgadmin`
+          community.postgresql.postgresql_privs:
+            login_db: socialmaps
+            type: schema
+            privs: usage
+            objs: socialmaps
+            role: pgadmin
+
+        - name: Grant SELECT privileges on `socialmaps` tables to role `pgadmin`
+          community.postgresql.postgresql_privs:
+            login_db: socialmaps
+            type: table
+            privs: SELECT
+            schema: socialmaps
+            objs: ALL_IN_SCHEMA
+            role: pgadmin
+
+        - name: Grant usage privileges on schema `osm2pgsql` to role `pgadmin`
+          community.postgresql.postgresql_privs:
+            login_db: socialmaps
+            type: schema
+            privs: usage
+            objs: osm2pgsql
+            role: pgadmin
+
+        - name: Grant SELECT privileges on `osm2pgsql` tables to role `pgadmin`
+          community.postgresql.postgresql_privs:
+            login_db: socialmaps
+            type: table
+            privs: SELECT
+            schema: osm2pgsql
+            objs: ALL_IN_SCHEMA
+            role: pgadmin
+
+    - name: Start pgAdmin container
+      community.docker.docker_container:
+        name: pgadmin4
+        image: docker.io/dpage/pgadmin4:9.15.0
+        pull: always
+        recreate: true
+        volumes:
+          - /var/run/postgresql:/var/run/postgresql
+          - /root/volume/pgadmin4/pgadmin4/servers.json:/pgadmin4/servers.json
+        restart_policy: unless-stopped
+        env:
+          PGADMIN_DEFAULT_EMAIL: "admin@socialmaps.org"
+          PGADMIN_DEFAULT_PASSWORD: "{{ secret_pgadmin_default_password }}"
+          PGADMIN_DISABLE_POSTFIX: "True"
+          PGADMIN_REPLACE_SERVERS_ON_STARTUP: "True"
+        networks:
+          - name: service-bridge

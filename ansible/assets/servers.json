@@ -1,0 +1,12 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "socialmaps",
+      "Group": "Servers",
+      "Host": "/var/run/postgresql",
+      "Port": 5432,
+      "Username": "pgadmin",
+      "MaintenanceDB": "postgres"
+    }
+  }
+}
