@@ -7,7 +7,7 @@
     - name: Start socialmaps-webapp container
       community.docker.docker_container:
         name: socialmaps-webapp
-        image: codeberg.org/socialmaps/webapp:latest
+        image: gitlab.com/socialmaps/webapp:latest
         pull: always
         recreate: true
         restart_policy: unless-stopped

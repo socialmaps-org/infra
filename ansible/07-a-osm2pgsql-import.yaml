@@ -17,7 +17,7 @@
       become: true
       become_user: osm2pgsql
       ansible.builtin.get_url:
-        url: https://codeberg.org/socialmaps/api/raw/branch/main/scripts/osm2pgsql.lua
+        url: https://gitlab.com/socialmaps/api/-/raw/main/scripts/osm2pgsql.lua
         dest: /home/osm2pgsql/osm2pgsql.lua
         mode: u=rw,g=r,o=r
 

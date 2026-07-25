@@ -9,7 +9,7 @@
   tasks:
     - name: Clone the repo
       ansible.builtin.git:
-        repo: 'https://codeberg.org/socialmaps/api.git'
+        repo: 'https://gitlab.com/socialmaps/api.git'
         dest: /home/socialmaps_api/api
         version: main
         single_branch: true

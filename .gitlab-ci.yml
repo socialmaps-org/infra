@@ -1,0 +1,18 @@
+stages:
+  - verify
+
+tflint:
+  stage: verify
+  image:
+    name: ghcr.io/terraform-linters/tflint:v0.64.0
+    entrypoint: [""]
+  script:
+    - ./scripts/tflint.sh
+
+ansible-lint:
+  stage: verify
+  image: docker.io/python:3.14.3-trixie
+  before_script:
+    - pip3 install ansible ansible-dev-tools
+  script:
+    - ./scripts/ansible-lint.sh
