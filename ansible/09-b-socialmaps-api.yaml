@@ -25,7 +25,7 @@
     - name: Start socialmaps-api container
       community.docker.docker_container:
         name: socialmaps-api
-        image: gitlab.com/socialmaps/api:latest
+        image: registry.gitlab.com/socialmaps/api:latest
         user: 1001  # FIXME: MAKE THIS DETERMINISTIC
         pull: always
         recreate: true
