@@ -1,0 +1,93 @@
+---
+- name: Configure pgschema
+  hosts: singleton
+
+  tasks:
+    - name: Create new system user `pgschema`
+      ansible.builtin.user:
+        name: pgschema
+        shell: /bin/bash
+
+    - name: Configure PostgreSQL for `pgschema`
+      become: true
+      become_user: postgres
+      block:
+        - name: Configure a new PostgreSQL database `pgschema`
+          block:
+            # `community.postgresql.postgresql_db` currently does not support
+            # `builtin_locale` so I am using the following:
+            #
+            #     createdb \
+            #       --encoding=UTF8 \
+            #       --locale-provider=builtin \
+            #       --builtin-locale='C.UTF-8' \
+            #       --template=template0 \
+            #       pgschema
+            #
+            # - name: Create new database `pgschema`
+            #   community.postgresql.postgresql_db:
+            #     name: pgschema
+            #     encoding: UTF8
+            #     locale_provider: builtin
+            #     builtin_locale: C.UTF-8
+            #     template: template0
+            - name: Enable PostGIS extension on the database
+              community.postgresql.postgresql_ext:
+                login_db: pgschema
+                name: postgis
+
+            - name: Create new PostgreSQL user `pgschema`
+              community.postgresql.postgresql_user:
+                login_db: pgschema
+                name: pgschema
+
+            - name: Grant all privileges on database to role `pgschema`
+              community.postgresql.postgresql_privs:
+                login_db: pgschema
+                type: database
+                privs: ALL
+                obj: pgschema
+                role: pgschema
+
+            - name: Make `pgschema` role a member of `socialmaps_api` group
+              community.postgresql.postgresql_membership:
+                group: socialmaps_api
+                target_role: pgschema
+
+        - name: Configure the existing PostgreSQL databased `socialmaps`
+          block:
+            - name: Grant all privileges on database to role `pgschema`
+              community.postgresql.postgresql_privs:
+                login_db: socialmaps
+                type: database
+                privs: ALL
+                obj: socialmaps
+                role: pgschema
+
+            - name: Grant usage privileges on schema `socialmaps` to role `pgschema`
+              community.postgresql.postgresql_privs:
+                login_db: socialmaps
+                type: schema
+                privs: usage
+                objs: socialmaps
+                role: pgschema
+
+    - name: Remove pgschema if already installed
+      ansible.builtin.apt:
+        name: pgschema
+        state: absent
+        autoremove: true
+        purge: true
+
+    - name: Download the .deb package
+      become: true
+      become_user: pgschema
+      ansible.builtin.get_url:
+        url: https://github.com/pgplex/pgschema/releases/download/v1.12.4/pgschema_1.12.4_amd64.deb
+        dest: /tmp/pgschema_1.12.4_amd64.deb
+        checksum: "sha256:52a848e6b5e331cced013e53dde3af5a84f356c919884833dfd7cea583ffce90"
+        mode: u=rw,g=r,o=r
+
+    - name: Install pgschema
+      ansible.builtin.apt:
+        deb: /tmp/pgschema_1.12.4_amd64.deb

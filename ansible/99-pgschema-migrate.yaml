@@ -1,0 +1,74 @@
+---
+- name: "Migrate PostgreSQL schema using pgschema"
+  hosts: singleton
+  gather_facts: false
+
+  tasks:
+    - name: Download the latest schema.sql
+      become: true
+      become_user: pgschema
+      ansible.builtin.get_url:
+        url: https://gitlab.com/socialmaps/api/-/raw/main/internal/database/schema.sql
+        dest: /home/pgschema/schema.sql
+        mode: u=rw,g=r,o=r
+
+    - name: Generate a plan
+      become: true
+      become_user: pgschema
+      ansible.builtin.command:
+        chdir: /home/pgschema
+        argv:
+          - pgschema
+          - plan
+          - --file=./schema.sql
+          - --schema=socialmaps
+          - --host=/var/run/postgresql
+          - --db=socialmaps
+          - --user=pgschema
+          - --plan-host=/var/run/postgresql
+          - --plan-db=pgschema
+          - --plan-user=pgschema
+          - --output-json=./plan.json
+          - --output-human=./plan.txt
+      changed_when: true
+
+    - name: Read the plan
+      ansible.builtin.command:
+        chdir: /home/pgschema
+        cmd: cat ./plan.txt
+      register: plantxt
+      changed_when: false
+
+    - name: Confirm the plan
+      ansible.builtin.pause:
+        prompt: "{{ plantxt.stdout }}\n\nDo you want to continue with the above plan? (yes/no)"
+      register: confirmation
+
+    - name: Abort unless confirmed
+      ansible.builtin.fail:
+        msg: "Migration has not been started."
+      when: confirmation.user_input | lower not in ['yes', 'y']
+
+    - name: Apply the plan
+      become: true
+      become_user: pgschema
+      environment:
+        PGOPTIONS: "-c role=socialmaps_api"
+      ansible.builtin.command:
+        chdir: /home/pgschema
+        argv:
+          - pgschema
+          - apply
+          - --plan=./plan.json
+          - --schema=socialmaps
+          - --host=/var/run/postgresql
+          - --db=socialmaps
+          - --user=pgschema
+          - --lock-timeout=60s
+          - --auto-approve
+      register: out_apply
+      changed_when: out_apply.rc == 0
+
+    - name: Confirm the plan application
+      ansible.builtin.pause:
+        prompt: "Plan successfully applied.\n\n--- STDOUT\n{{ out_apply.stdout }}\n\n--- STDERR\n{{ out_apply.stderr }}\n\n---\n\nPress enter to exit"
