@@ -158,6 +158,25 @@
             param: random_page_cost
             value: '1.5'
 
+    - name: Configure PostgreSQL logging
+      become: true
+      become_user: postgres
+      block:
+        - name: Log PostgreSQL messages to syslog
+          community.postgresql.postgresql_alter_system:
+            param: log_destination
+            value: syslog
+
+        - name: Disable PostgreSQL's file logging collector
+          community.postgresql.postgresql_alter_system:
+            param: logging_collector
+            value: "off"
+
+        - name: Disable splitting messages
+          community.postgresql.postgresql_alter_system:
+            param: syslog_split_messages
+            value: "off"
+
     - name: Restart postgresql.service
       ansible.builtin.systemd_service:
         name: postgresql.service
